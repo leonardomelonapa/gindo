@@ -13,29 +13,29 @@ export const DAYS = {
 
 export const EXERCISES = [
   { id: 'sentadilla', name: 'Sentadilla con barra', day: 1, kind: 'lower',
-    sets: 4, repStart: 6, repMin: 5, repMax: 8, step: 5, startLoad: 65,
+    sets: 4, repStart: 6, repMin: 5, repMax: 8, step: 5, startLoad: 65, rest: 180,
     rirByPhase: [4, 3, 2], rirLabel: '4 → 2' },
   { id: 'press-inclinado', name: 'Press inclinado (Smith)', day: 1, kind: 'upper',
-    sets: 3, repStart: 10, repMin: 10, repMax: 15, step: 2.5, startLoad: 15, unit: 'kg/lado',
+    sets: 3, repStart: 10, repMin: 10, repMax: 15, step: 2.5, startLoad: 15, unit: 'kg/lado', rest: 120,
     rirByPhase: [3, 3, 2], rirLabel: '3' },
   { id: 'cruces', name: 'Cruces de polea high-low', day: 1, kind: 'upper',
-    sets: 3, repStart: 12, repMin: 10, repMax: 15, step: 5, startLoad: 20, unit: 'kg/lado',
+    sets: 3, repStart: 12, repMin: 10, repMax: 15, step: 5, startLoad: 20, unit: 'kg/lado', rest: 75,
     rirByPhase: [3, 3, 2], rirLabel: '2-3' },
   { id: 'elevaciones', name: 'Elevaciones laterales', day: 1, kind: 'upper',
-    sets: 3, repStart: 12, repMin: 12, repMax: 15, step: 5, startLoad: 20,
+    sets: 3, repStart: 12, repMin: 12, repMax: 15, step: 5, startLoad: 20, rest: 60,
     rirByPhase: [2, 2, 2], rirLabel: '2' },
 
   { id: 'peso-muerto', name: 'Peso muerto', day: 5, kind: 'lower',
-    sets: 4, repStart: 6, repMin: 5, repMax: 8, step: 5, startLoad: 100,
+    sets: 4, repStart: 6, repMin: 5, repMax: 8, step: 5, startLoad: 100, rest: 210,
     rirByPhase: [3, 3, 2], rirLabel: '3' },
   { id: 'remo-unilateral', name: 'Remo sentado unilateral', day: 5, kind: 'upper',
-    sets: 3, repStart: 10, repMin: 10, repMax: 15, step: 5, startLoad: null, unit: 'kg/lado',
+    sets: 3, repStart: 10, repMin: 10, repMax: 15, step: 5, startLoad: null, unit: 'kg/lado', rest: 90,
     rirByPhase: [3, 3, 2], rirLabel: '2-3' },
   { id: 'dominadas', name: 'Dominadas agarre neutro', day: 5, kind: 'pullup',
-    sets: 4, repStart: 8, repMin: 8, repMax: 12, step: 0, startLoad: 0,
+    sets: 4, repStart: 8, repMin: 8, repMax: 12, step: 0, startLoad: 0, rest: 150,
     rirByPhase: [3, 3, 2], rirLabel: '2-3' },
   { id: 'face-pulls', name: 'Face pulls o pájaros', day: 5, kind: 'upper',
-    sets: 3, repStart: 15, repMin: 15, repMax: 15, step: 2.5, startLoad: null,
+    sets: 3, repStart: 15, repMin: 15, repMax: 15, step: 2.5, startLoad: null, rest: 60,
     rirByPhase: [2, 2, 2], rirLabel: '2' },
 ];
 
@@ -92,6 +92,7 @@ export function propose(exercise, last, week) {
     rir,
     rirLabel: week <= 2 ? exercise.rirLabel : String(rir),
     unit: exercise.unit ?? 'kg',
+    rest: exercise.rest,
   };
 
   if (!last) {
@@ -101,6 +102,7 @@ export function propose(exercise, last, week) {
       reps: exercise.repStart,
       block: 0,
       needsLoad: exercise.startLoad === null,
+      tone: 'flat',
       note: 'Carga de partida del plan.',
     };
   }
@@ -113,6 +115,7 @@ export function propose(exercise, last, week) {
       ...hold,
       load: exercise.step > 0 ? roundLoad(last.load * 0.9, exercise.step) : last.load,
       block: CLEAN_SESSIONS_TO_UNBLOCK,
+      tone: 'bad',
       note: `Dolor ${maxPain}/10 la sesión pasada. Baja un 10% y no sube hasta ${CLEAN_SESSIONS_TO_UNBLOCK} sesiones sin molestia.`,
     };
   }
@@ -122,6 +125,7 @@ export function propose(exercise, last, week) {
     return {
       ...hold,
       block,
+      tone: block > 0 ? 'warn' : 'up',
       note: block > 0
         ? `Carga bloqueada por dolor. Faltan ${block} sesión(es) sin molestia para volver a subir.`
         : 'Bloqueo levantado: la próxima sesión ya puede subir.',
@@ -133,35 +137,37 @@ export function propose(exercise, last, week) {
       ...hold,
       sets: Math.max(2, exercise.sets - 1),
       load: exercise.step > 0 ? roundLoad(last.load * 0.9, exercise.step) : last.load,
+      tone: 'warn',
       note: 'Semana de descarga: menos series y un 10% menos de carga.',
     };
   }
 
   if (!hitTarget || !hardEnough) {
-    return { ...hold, note: 'Repite: la sesión pasada no cerraste el objetivo.' };
+    return { ...hold, tone: 'warn', note: 'Repite: la sesión pasada no cerraste el objetivo.' };
   }
 
   const upperBlockedByPhase = exercise.kind !== 'lower' && phaseFor(week) === 1;
   if (upperBlockedByPhase && last.targetReps >= exercise.repMax) {
-    return { ...hold, note: 'Fase 1: el tren superior no sube carga. Mantén y acumula calidad.' };
+    return { ...hold, tone: 'flat', note: 'Fase 1: el tren superior no sube carga. Mantén y acumula calidad.' };
   }
 
   if (last.targetReps < exercise.repMax) {
-    return { ...hold, reps: last.targetReps + 1, note: 'Objetivo cerrado. Sube una repetición.' };
+    return { ...hold, reps: last.targetReps + 1, tone: 'up', note: 'Objetivo cerrado. Sube una repetición.' };
   }
 
   if (exercise.kind === 'pullup') {
-    return { ...hold, note: 'Ya estás en 4x12. Nada de lastre hasta 3 semanas con dolor 0-1.' };
+    return { ...hold, tone: 'flat', note: 'Ya estás en 4x12. Nada de lastre hasta 3 semanas con dolor 0-1.' };
   }
 
   if (exercise.kind === 'upper' && maxPain > PAIN_TO_ADD_LOAD) {
-    return { ...hold, note: `Llegaste a ${exercise.repMax} pero el dolor fue ${maxPain}/10. No sube hasta que baje de ${PAIN_TO_ADD_LOAD}.` };
+    return { ...hold, tone: 'warn', note: `Llegaste a ${exercise.repMax} pero el dolor fue ${maxPain}/10. No sube hasta que baje de ${PAIN_TO_ADD_LOAD}.` };
   }
 
   return {
     ...hold,
     load: last.load + exercise.step,
     reps: exercise.repMin,
+    tone: 'up',
     note: `Objetivo cerrado a ${exercise.repMax} reps. Sube ${exercise.step} kg y vuelve a ${exercise.repMin}.`,
   };
 }

@@ -1,7 +1,9 @@
-const CACHE = 'gindo-v1';
+const CACHE = 'gindo-v2';
 const SHELL = [
   '.', 'index.html', 'styles.css', 'app.js', 'engine.js',
-  'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png',
+  'manifest.webmanifest',
+  'icon-32.png', 'icon-180.png', 'icon-192.png', 'icon-512.png',
+  'assets/logo.png', 'assets/monsters-a.png', 'assets/monsters-b.webp',
 ];
 
 self.addEventListener('install', (e) => {
