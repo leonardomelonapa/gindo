@@ -140,6 +140,25 @@ main { padding: var(--s-4); }
   font-size: 13px;
 }
 
+/* --- campos de ajustes --- */
+
+.field-label {
+  display: block;
+  margin: var(--s-3) 0 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink-2);
+}
+.field {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  /* 16px evita que iOS haga zoom al enfocar el campo. */
+  font-size: 16px;
+}
+.field::placeholder { color: var(--ink-3); }
+
 /* --- monstruos --- */
 
 /* Las hojas no son rejillas regulares, así que cada monstruo lleva su caja real

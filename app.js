@@ -9,12 +9,18 @@ const SHEET_A = new Set(['press-inclinado', 'dominadas', 'done']);
 const $ = (id) => document.getElementById(id);
 
 const REST_DAYS = {
-  0: 'Domingo — sauna o infrarrojos, y planificación. Ve a Historial, copia el log y pégalo en el doc.',
+  0: 'Domingo — sauna o infrarrojos, y planificación. Pásate por Ajustes y comprueba que no queden sesiones sin enviar.',
   2: 'Martes — movilidad 10 minutos en casa. Nada que registrar aquí.',
   3: 'Miércoles — conditioning en The Fitness Hub. Sustituye todo lo overhead y lo gimnástico.',
   4: 'Jueves — movilidad 10 minutos en casa. Nada que registrar aquí.',
   6: 'Sábado — cardio y deporte nuevo. Si ayer el peso muerto te cargó las lumbares, hoy piscina o bici, no cinta.',
 };
+
+const emptyState = () => ({
+  sessions: [], session: null,
+  lastExport: null, lastSent: null,
+  config: { url: '', token: '' },
+});
 
 let state = loadState();
 let selectedDay = defaultDay();
@@ -25,9 +31,9 @@ let wakeLock = null;
 function loadState() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw && Array.isArray(raw.sessions)) return raw;
+    if (raw && Array.isArray(raw.sessions)) return { ...emptyState(), ...raw };
   } catch { /* almacenamiento corrupto o vacío */ }
-  return { sessions: [], session: null, lastExport: null };
+  return emptyState();
 }
 
 function save() {
@@ -605,6 +611,128 @@ function renderCopyHint() {
   $('copy-hint').textContent = log ? `${log.count} sesión(es) sin pasar al doc.` : 'Todo al día con el doc.';
 }
 
+/* ---------- envío al Sheets ---------- */
+
+function pendingToSend() {
+  return state.lastSent ? state.sessions.filter((s) => s.date > state.lastSent) : state.sessions;
+}
+
+function hasPending() {
+  return Boolean(state.config.url) && pendingToSend().length > 0;
+}
+
+function rowsFor(sessions) {
+  const rows = [];
+  for (const s of sessions) {
+    for (const e of s.entries) {
+      const ex = findExercise(e.exerciseId);
+      const bodyweight = ex.kind === 'pullup';
+      rows.push({
+        // El script descarta claves ya presentes, así que un reenvío no duplica filas.
+        key: `${s.date}|${s.day}|${ex.id}`,
+        date: s.date,
+        day: dayLabel(s.day),
+        week: s.week,
+        phase: phaseFor(s.week),
+        exercise: ex.name,
+        load: bodyweight ? '' : e.load,
+        unit: bodyweight ? 'peso corporal' : ex.unit ?? 'kg',
+        sets: e.sets.map((x) => `${x.reps}/${x.rir}`).join(' · '),
+        maxPain: Math.max(...e.sets.map((x) => x.pain)),
+      });
+    }
+  }
+  return rows;
+}
+
+function saveConfig() {
+  const url = $('hook-url').value.trim();
+  if (url && !url.startsWith('https://')) {
+    $('send-hint').textContent = 'La URL tiene que ser https.';
+    return;
+  }
+  state.config = { url, token: $('hook-token').value.trim() };
+  save();
+  $('send-hint').textContent = 'Configuración guardada.';
+}
+
+async function pushPending() {
+  const { url, token } = state.config;
+  if (!url) return { ok: false, message: 'Falta la URL del Apps Script.' };
+
+  const pending = pendingToSend();
+  if (!pending.length) return { ok: true, message: 'No hay sesiones nuevas que enviar.' };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      // text/plain evita el preflight CORS, que Apps Script no contesta.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token, rows: rowsFor(pending) }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+
+    state.lastSent = pending[pending.length - 1].date;
+    save();
+    renderSettings();
+    return { ok: true, message: `${body.added} fila(s) añadidas. ${body.skipped} ya estaban.` };
+  } catch (err) {
+    return { ok: false, message: `No se envió (${err.message}). Los datos siguen aquí, reintenta cuando tengas red.` };
+  }
+}
+
+async function sendLog() {
+  const btn = $('send-log');
+  btn.disabled = true;
+  $('send-hint').textContent = 'Enviando…';
+  $('send-hint').textContent = (await pushPending()).message;
+  btn.disabled = false;
+}
+
+async function autoSend() {
+  if (!state.config.url) return;
+  const status = $('sync-status');
+  status.textContent = 'Enviando al Sheets…';
+  const { ok, message } = await pushPending();
+  status.textContent = ok ? 'Sesión enviada al Sheets.' : `${message} Reintenta desde Ajustes.`;
+}
+
+function renderSettings() {
+  $('hook-url').value = state.config.url;
+  $('hook-token').value = state.config.token;
+  $('send-hint').textContent = hasPending() ? 'Queda alguna sesión sin enviar. Inténtalo otra vez.' : '';
+}
+
+// Lo pinta render(), así que el aviso sigue ahí al reabrir la app; autoSend
+// lo sobreescribe justo después de guardar una sesión.
+function renderSyncStatus() {
+  $('sync-status').textContent = hasPending() ? 'Queda alguna sesión sin enviar. Ve a Ajustes e inténtalo otra vez.' : '';
+}
+
+/* ---------- copia de seguridad ---------- */
+
+function downloadBackup() {
+  const payload = {
+    app: 'gindo',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sessions: state.sessions,
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  const a = el('a');
+  a.href = url;
+  a.download = `gindo-${todayISO()}.json`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // Safari aborta la descarga si el blob se revoca en el mismo tick.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  const n = state.sessions.length;
+  $('backup-hint').textContent = `${n} sesión${n === 1 ? '' : 'es'} en el archivo.`;
+}
+
 /* ---------- render raíz ---------- */
 
 function renderHeader() {
@@ -634,6 +762,7 @@ function render() {
     renderDaySwitch();
     renderRestDay();
     renderIdle();
+    renderSyncStatus();
     stopTicker();
     keepAwake(false);
   } else if (stage === 'active') {
@@ -647,6 +776,7 @@ function render() {
 
   renderHistory();
   renderCopyHint();
+  renderSettings();
 }
 
 /* ---------- eventos ---------- */
@@ -669,6 +799,7 @@ $('close-session').onclick = () => {
   commitSession(active());
   save();
   render();
+  autoSend();
 };
 
 $('resume-session').onclick = () => {
@@ -688,12 +819,16 @@ $('sheet-cancel').onclick = () => $('sheet').close();
 $('sheet').addEventListener('close', () => { sheetCtx = null; });
 
 $('copy-log').onclick = copyLog;
+$('backup').onclick = downloadBackup;
+$('hook-save').onclick = saveConfig;
+$('send-log').onclick = sendLog;
 
 for (const tab of document.querySelectorAll('.tabs button')) {
   tab.onclick = () => {
     for (const t of document.querySelectorAll('.tabs button')) t.classList.toggle('active', t === tab);
-    $('view-hoy').classList.toggle('hidden', tab.dataset.view !== 'hoy');
-    $('view-historial').classList.toggle('hidden', tab.dataset.view !== 'historial');
+    for (const s of document.querySelectorAll('main > section')) {
+      s.classList.toggle('hidden', s.id !== `view-${tab.dataset.view}`);
+    }
   };
 }
 

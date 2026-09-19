@@ -27,12 +27,14 @@
   <nav class="tabs">
     <button type="button" data-view="hoy" class="active">Hoy</button>
     <button type="button" data-view="historial">Historial</button>
+    <button type="button" data-view="ajustes">Ajustes</button>
   </nav>
 </header>
 
 <main>
   <section id="view-hoy">
     <div id="stage-idle">
+      <p id="sync-status" class="hint" aria-live="polite"></p>
       <div id="day-switch" class="day-switch"></div>
       <div id="rest-day" class="callout hidden"></div>
       <div id="session-intro"></div>
@@ -85,6 +87,32 @@
     <button id="copy-log" type="button" class="primary">Copiar log para el domingo</button>
     <p id="copy-hint" class="hint"></p>
     <div id="history"></div>
+  </section>
+
+  <section id="view-ajustes" class="hidden">
+    <div class="card">
+      <h3>Envío al Sheets</h3>
+      <p class="hint">Se guarda solo en este teléfono. No viaja al repositorio.</p>
+
+      <label class="field-label" for="hook-url">URL del Apps Script</label>
+      <input id="hook-url" class="field" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+      <label class="field-label" for="hook-token">Token</label>
+      <input id="hook-token" class="field" type="text" placeholder="una palabra larga que solo sepas tú"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+      <button id="hook-save" type="button" class="ghost">Guardar configuración</button>
+      <button id="send-log" type="button" class="primary">Enviar sesiones pendientes</button>
+      <p id="send-hint" class="hint"></p>
+    </div>
+
+    <div class="card">
+      <h3>Copia de seguridad</h3>
+      <p class="hint">Descarga todo el historial como archivo. Guárdalo en iCloud Drive: no depende de red ni de terceros.</p>
+      <button id="backup" type="button" class="primary">Descargar copia</button>
+      <p id="backup-hint" class="hint"></p>
+    </div>
   </section>
 </main>
 

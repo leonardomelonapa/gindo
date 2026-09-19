@@ -1,4 +1,4 @@
-const CACHE = 'gindo-v2';
+const CACHE = 'gindo-v3';
 const SHELL = [
   '.', 'index.html', 'styles.css', 'app.js', 'engine.js',
   'manifest.webmanifest',
