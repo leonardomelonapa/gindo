@@ -3,67 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Gindo">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
 <title>Gindo</title>
 </head>
 <body>
-<header>
-  <div class="head-row">
-    <h1>Gindo</h1>
+<header class="app-head">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div class="brand-text">
+      <h1>Gindo</h1>
+      <p id="subtitle"></p>
+    </div>
     <span id="phase-badge" class="badge"></span>
   </div>
-  <p id="subtitle"></p>
   <nav class="tabs">
-    <button data-view="hoy" class="active">Hoy</button>
-    <button data-view="historial">Historial</button>
+    <button type="button" data-view="hoy" class="active">Hoy</button>
+    <button type="button" data-view="historial">Historial</button>
   </nav>
 </header>
 
 <main>
   <section id="view-hoy">
-    <div id="day-switch" class="day-switch"></div>
-    <div id="rest-day" class="card hidden"></div>
-    <div id="exercises"></div>
-    <button id="close-session" class="primary hidden">Cerrar sesión</button>
+    <div id="stage-idle">
+      <div id="day-switch" class="day-switch"></div>
+      <div id="rest-day" class="callout hidden"></div>
+      <div id="session-intro"></div>
+      <button id="start-session" type="button" class="primary">Empezar entrenamiento</button>
+    </div>
+
+    <div id="stage-active" class="hidden">
+      <div class="progress">
+        <div class="progress-meta">
+          <span id="progress-label"></span>
+          <span id="session-clock" class="mono"></span>
+        </div>
+        <div class="progress-track"><div id="progress-fill"></div></div>
+      </div>
+
+      <div id="exercise-strip" class="strip"></div>
+
+      <div id="rest-panel" class="rest-panel hidden" aria-live="polite">
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="54" />
+            <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="54" />
+          </svg>
+          <div class="ring-center">
+            <span id="rest-time" class="mono">0:00</span>
+            <span id="rest-caption"></span>
+          </div>
+        </div>
+        <div class="rest-actions">
+          <button type="button" id="rest-minus">−15s</button>
+          <button type="button" id="rest-skip" class="primary">Listo, siguiente</button>
+          <button type="button" id="rest-plus">+15s</button>
+        </div>
+      </div>
+
+      <div id="current-card"></div>
+
+      <button id="log-set" type="button" class="primary">Registrar serie</button>
+      <button id="abort-session" type="button" class="ghost">Abandonar sesión</button>
+    </div>
+
+    <div id="stage-done" class="hidden">
+      <div id="summary"></div>
+      <button id="close-session" type="button" class="primary">Guardar sesión</button>
+      <button id="resume-session" type="button" class="ghost">Volver al entrenamiento</button>
+    </div>
   </section>
 
   <section id="view-historial" class="hidden">
-    <button id="copy-log" class="primary">Copiar log para el domingo</button>
+    <button id="copy-log" type="button" class="primary">Copiar log para el domingo</button>
     <p id="copy-hint" class="hint"></p>
     <div id="history"></div>
   </section>
 </main>
 
-<div id="sheet" class="sheet hidden">
-  <div class="sheet-inner">
+<dialog id="sheet">
+  <form method="dialog" class="sheet-inner">
+    <div class="sheet-grab" aria-hidden="true"></div>
     <h2 id="sheet-title"></h2>
     <p id="sheet-sub" class="hint"></p>
 
-    <label>Repeticiones</label>
-    <div class="stepper">
-      <button id="reps-minus">−</button>
-      <span id="reps-value">0</span>
-      <button id="reps-plus">+</button>
+    <label id="reps-label">Repeticiones</label>
+    <div class="stepper" role="group" aria-labelledby="reps-label">
+      <button type="button" id="reps-minus" aria-label="Una repetición menos">−</button>
+      <span id="reps-value" class="mono" aria-live="polite">0</span>
+      <button type="button" id="reps-plus" aria-label="Una repetición más">+</button>
     </div>
 
-    <label>RIR <span class="hint-inline">(repeticiones que te quedaban)</span></label>
-    <div id="rir-chips" class="chips"></div>
+    <label id="rir-label">RIR <span class="hint-inline">(repeticiones que te quedaban)</span></label>
+    <div id="rir-chips" class="chips" role="group" aria-labelledby="rir-label"></div>
 
-    <label>Dolor de hombro <span class="hint-inline">(0-10)</span></label>
-    <div id="pain-chips" class="chips pain"></div>
+    <label id="pain-label">Dolor de hombro <span class="hint-inline">(0-10)</span></label>
+    <div id="pain-chips" class="chips pain" role="group" aria-labelledby="pain-label"></div>
 
     <div class="sheet-actions">
-      <button id="sheet-cancel">Cancelar</button>
-      <button id="sheet-save" class="primary">Guardar serie</button>
+      <button type="button" id="sheet-cancel">Cancelar</button>
+      <button type="button" id="sheet-save" class="primary">Guardar serie</button>
     </div>
-  </div>
-</div>
+  </form>
+</dialog>
 
 <script type="module" src="app.js"></script>
 </body>
