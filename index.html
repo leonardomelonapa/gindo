@@ -18,17 +18,19 @@
 <header class="app-head">
   <div class="brand">
     <span class="brand-mark" aria-hidden="true"></span>
-    <div class="brand-text">
-      <h1>Gindo</h1>
-      <p id="subtitle"></p>
-    </div>
+    <h1>Gindo</h1>
     <span id="phase-badge" class="badge"></span>
+    <button type="button" id="go-historial" class="icon-btn" aria-label="Historial" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+      </svg>
+    </button>
+    <button type="button" id="go-ajustes" class="icon-btn" aria-label="Ajustes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 8h10M18 8h2M4 16h4M12 16h8" /><circle cx="16" cy="8" r="2" /><circle cx="10" cy="16" r="2" />
+      </svg>
+    </button>
   </div>
-  <nav class="tabs">
-    <button type="button" data-view="hoy" class="active">Hoy</button>
-    <button type="button" data-view="historial">Historial</button>
-    <button type="button" data-view="ajustes">Ajustes</button>
-  </nav>
 </header>
 
 <main>
@@ -60,8 +62,12 @@
           </svg>
           <div class="ring-center">
             <span id="rest-time" class="mono">0:00</span>
-            <span id="rest-caption"></span>
           </div>
+        </div>
+        <div class="rest-next">
+          <p class="kicker">Siguiente</p>
+          <h3 id="rest-next-name"></h3>
+          <p id="rest-next-meta" class="meta"></p>
         </div>
         <div class="rest-actions">
           <button type="button" id="rest-minus">−15s</button>
@@ -84,60 +90,74 @@
   </section>
 
   <section id="view-historial" class="hidden">
-    <button id="copy-log" type="button" class="primary">Copiar log para el domingo</button>
-    <p id="copy-hint" class="hint"></p>
     <div id="history"></div>
-  </section>
-
-  <section id="view-ajustes" class="hidden">
-    <div class="card">
-      <h3>Envío al Sheets</h3>
-      <p class="hint">Se guarda solo en este teléfono. No viaja al repositorio.</p>
-
-      <label class="field-label" for="hook-url">URL del Apps Script</label>
-      <input id="hook-url" class="field" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec"
-             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-
-      <label class="field-label" for="hook-token">Token</label>
-      <input id="hook-token" class="field" type="text" placeholder="una palabra larga que solo sepas tú"
-             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-
-      <button id="hook-save" type="button" class="ghost">Guardar configuración</button>
-      <button id="send-log" type="button" class="primary">Enviar sesiones pendientes</button>
-      <p id="send-hint" class="hint"></p>
-    </div>
-
-    <div class="card">
-      <h3>Copia de seguridad</h3>
-      <p class="hint">Descarga todo el historial como archivo. Guárdalo en iCloud Drive: no depende de red ni de terceros.</p>
-      <button id="backup" type="button" class="primary">Descargar copia</button>
-      <p id="backup-hint" class="hint"></p>
-    </div>
   </section>
 </main>
 
 <dialog id="sheet">
   <form method="dialog" class="sheet-inner">
-    <div class="sheet-grab" aria-hidden="true"></div>
-    <h2 id="sheet-title"></h2>
-    <p id="sheet-sub" class="hint"></p>
-
-    <label id="reps-label">Repeticiones</label>
-    <div class="stepper" role="group" aria-labelledby="reps-label">
-      <button type="button" id="reps-minus" aria-label="Una repetición menos">−</button>
-      <span id="reps-value" class="mono" aria-live="polite">0</span>
-      <button type="button" id="reps-plus" aria-label="Una repetición más">+</button>
+    <div class="sheet-top">
+      <div>
+        <h2 id="sheet-title"></h2>
+        <p id="sheet-sub" class="hint"></p>
+      </div>
+      <button type="button" id="sheet-cancel" class="icon-btn" aria-label="Cancelar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
     </div>
 
-    <label id="rir-label">RIR <span class="hint-inline">(repeticiones que te quedaban)</span></label>
-    <div id="rir-chips" class="chips" role="group" aria-labelledby="rir-label"></div>
+    <div class="sheet-body">
+      <div class="sheet-group">
+        <p id="reps-label" class="kicker">Repeticiones</p>
+        <div class="stepper" role="group" aria-labelledby="reps-label">
+          <button type="button" id="reps-minus" aria-label="Una repetición menos">−</button>
+          <span id="reps-value" class="mono" aria-live="polite">0</span>
+          <button type="button" id="reps-plus" aria-label="Una repetición más">+</button>
+        </div>
+      </div>
 
-    <label id="pain-label">Dolor de hombro <span class="hint-inline">(0-10)</span></label>
-    <div id="pain-chips" class="chips pain" role="group" aria-labelledby="pain-label"></div>
+      <div class="sheet-group">
+        <p id="rir-label" class="kicker">Te quedaban</p>
+        <div id="rir-chips" class="chips" role="group" aria-labelledby="rir-label"></div>
+      </div>
+    </div>
+
+    <div class="sheet-foot">
+      <button type="button" id="pain-toggle" class="fold" aria-expanded="false" aria-controls="pain-chips">
+        <span id="pain-state"></span>
+        <span class="fold-cue">cambiar</span>
+      </button>
+      <div id="pain-chips" class="chips pain hidden" role="group" aria-label="Dolor de hombro, de 0 a 10"></div>
+      <button type="button" id="sheet-save" class="primary">Guardar serie</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settings">
+  <form method="dialog" class="sheet-inner">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <h2>Ajustes</h2>
+    <p class="hint">La URL y el token se guardan solo en este teléfono. No viajan al repositorio.</p>
+
+    <label class="field-label" for="hook-url">URL del Apps Script</label>
+    <input id="hook-url" class="field" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+    <label class="field-label" for="hook-token">Token</label>
+    <input id="hook-token" class="field" type="text" placeholder="una palabra larga que solo sepas tú"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+    <button id="hook-save" type="button" class="ghost">Guardar configuración</button>
+    <button id="send-log" type="button" class="ghost">Enviar sesiones pendientes</button>
+    <p id="send-hint" class="hint"></p>
+
+    <button id="backup" type="button" class="ghost">Descargar copia del historial</button>
+    <p id="backup-hint" class="hint"></p>
 
     <div class="sheet-actions">
-      <button type="button" id="sheet-cancel">Cancelar</button>
-      <button type="button" id="sheet-save" class="primary">Guardar serie</button>
+      <button type="button" id="settings-close" class="primary">Cerrar</button>
     </div>
   </form>
 </dialog>

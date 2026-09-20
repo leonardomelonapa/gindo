@@ -18,12 +18,13 @@ const REST_DAYS = {
 
 const emptyState = () => ({
   sessions: [], session: null,
-  lastExport: null, lastSent: null,
+  lastSent: null,
   config: { url: '', token: '' },
 });
 
 let state = loadState();
 let selectedDay = defaultDay();
+let verHistorial = false;
 let sheetCtx = null;
 let ticker = null;
 let wakeLock = null;
@@ -126,9 +127,14 @@ function flushStaleSession() {
 
 /* ---------- descanso ---------- */
 
-function beginRest(seconds, label) {
-  active().rest = { until: Date.now() + seconds * 1000, total: seconds, label };
+function beginRest(seconds, next) {
+  active().rest = { until: Date.now() + seconds * 1000, total: seconds, next };
 }
+
+const restNext = (slot) => ({
+  name: slot.ex.name,
+  meta: `Serie ${slot.index + 1} · ${loadText(slot.ex, slot.p)} · ${slot.p.reps} reps`,
+});
 
 const restLeft = () => {
   const r = active()?.rest;
@@ -182,7 +188,9 @@ function paintRest() {
   const left = restLeft();
   $('rest-time').textContent = mmss(left);
   $('ring-fill').style.strokeDashoffset = RING * (1 - left / (r.total * 1000));
-  $('rest-caption').textContent = r.label;
+  // Una sesión a medias guardada antes de este cambio no trae `next`.
+  $('rest-next-name').textContent = r.next?.name ?? '';
+  $('rest-next-meta').textContent = r.next?.meta ?? '';
 }
 
 function paintClock() {
@@ -429,7 +437,7 @@ function renderDone(session) {
   for (const [v, k] of [
     [logged.length, 'series'],
     [`${Math.round((Date.now() - session.startedAt) / 60000)}′`, 'duración'],
-    [`${Math.round(volume)}`, 'kg movidos'],
+    [`${Math.round(volume)}`, 'kg'],
     [`${Math.max(0, ...logged.map(({ s }) => s.pain))}`, 'dolor máx'],
   ]) {
     const box = el('div', 'stat');
@@ -461,6 +469,7 @@ function openSheet(exId, index) {
     reps: existing?.reps ?? p.reps,
     rir: existing?.rir ?? p.rir,
     pain: existing?.pain ?? prev?.pain ?? 0,
+    painOpen: (existing?.pain ?? prev?.pain ?? 0) > 0,
   };
 
   $('sheet-title').textContent = `${ex.name} · serie ${index + 1}`;
@@ -483,7 +492,13 @@ function renderSheet() {
     rir.append(b);
   }
 
+  // El dolor casi siempre es 0, así que la escala entera vive plegada.
+  $('pain-state').textContent = sheetCtx.pain === 0 ? 'Hombro · sin dolor' : `Hombro · ${sheetCtx.pain} de 10`;
+  $('pain-toggle').classList.toggle('on', sheetCtx.painOpen);
+  $('pain-toggle').setAttribute('aria-expanded', String(sheetCtx.painOpen));
+
   const pain = $('pain-chips');
+  pain.classList.toggle('hidden', !sheetCtx.painOpen);
   pain.innerHTML = '';
   for (let v = 0; v <= 10; v++) {
     const b = el('button', sheetCtx.pain === v ? (v > PAIN_STOP ? 'sel high' : 'sel') : '', String(v));
@@ -497,7 +512,7 @@ function renderSheet() {
 
 function saveSet() {
   const session = active();
-  const { ex, p } = proposalsFor(session.day, session.entries).find((x) => x.ex.id === sheetCtx.exId);
+  const { p } = proposalsFor(session.day, session.entries).find((x) => x.ex.id === sheetCtx.exId);
   const entry = session.entries[sheetCtx.exId] ??= { load: null, sets: [] };
   const wasEmpty = !entry.sets[sheetCtx.index];
   entry.load ??= p.load;
@@ -508,11 +523,7 @@ function saveSet() {
   const next = firstPending(session);
   if (next) {
     session.cursor = { exId: next.ex.id, index: next.index };
-    if (wasEmpty) {
-      beginRest(p.rest, next.ex.id === ex.id
-        ? `Siguiente: ${ex.name}, serie ${next.index + 1}`
-        : `Siguiente ejercicio: ${next.ex.name}`);
-    }
+    if (wasEmpty) beginRest(p.rest, restNext(next));
   } else {
     session.finished = true;
     session.rest = null;
@@ -527,11 +538,6 @@ function saveSet() {
 function renderHistory() {
   const wrap = $('history');
   wrap.innerHTML = '';
-
-  if (!state.sessions.length) {
-    wrap.innerHTML = '<p class="empty">Todavía no has cerrado ninguna sesión.</p>';
-    return;
-  }
 
   for (const s of [...state.sessions].reverse()) {
     const box = card();
@@ -559,56 +565,6 @@ function formatDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   return `${d} ${months[m - 1]} ${y}`;
-}
-
-function buildLog() {
-  const pending = state.lastExport
-    ? state.sessions.filter((s) => s.date > state.lastExport)
-    : state.sessions;
-  if (!pending.length) return null;
-
-  const lines = [];
-  for (const s of pending) {
-    lines.push(`**${dayLabel(s.day)} ${formatDate(s.date)}** — semana ${s.week}, fase ${phaseFor(s.week)}`);
-    lines.push('');
-    lines.push('| Ejercicio | Carga | Series (reps/RIR) | Dolor máx |');
-    lines.push('| --- | --- | --- | --- |');
-    for (const e of s.entries) {
-      const ex = findExercise(e.exerciseId);
-      const sets = e.sets.map((x) => `${x.reps}/${x.rir}`).join(' · ');
-      const load = ex.kind === 'pullup' ? 'peso corporal' : `${e.load} ${ex.unit ?? 'kg'}`;
-      const maxPain = Math.max(...e.sets.map((x) => x.pain));
-      lines.push(`| ${ex.name} | ${load} | ${sets} | ${maxPain}/10 |`);
-    }
-    lines.push('');
-  }
-  return { text: lines.join('\n'), last: pending[pending.length - 1].date, count: pending.length };
-}
-
-async function copyLog() {
-  const log = buildLog();
-  if (!log) {
-    $('copy-hint').textContent = 'No hay sesiones nuevas desde la última vez que copiaste.';
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(log.text);
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = log.text;
-    document.body.append(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-  }
-  state.lastExport = log.last;
-  save();
-  $('copy-hint').textContent = `${log.count} sesión(es) copiadas. Pégalas en la pestaña "Log de progreso" del doc.`;
-}
-
-function renderCopyHint() {
-  const log = buildLog();
-  $('copy-hint').textContent = log ? `${log.count} sesión(es) sin pasar al doc.` : 'Todo al día con el doc.';
 }
 
 /* ---------- envío al Sheets ---------- */
@@ -740,18 +696,25 @@ function renderHeader() {
   const badge = $('phase-badge');
   badge.textContent = isDeload(week) ? `S${week} · descarga` : `S${week} · fase ${phaseFor(week)}`;
   badge.classList.toggle('deload', isDeload(week));
+}
 
-  const done = state.sessions.length;
-  $('subtitle').textContent = done
-    ? `${done} sesión${done === 1 ? '' : 'es'} registrada${done === 1 ? '' : 's'}`
-    : 'Sin sesiones todavía. Arranca el lunes 21 de septiembre.';
+function renderNav() {
+  $('view-hoy').classList.toggle('hidden', verHistorial);
+  $('view-historial').classList.toggle('hidden', !verHistorial);
+  $('go-historial').classList.toggle('active', verHistorial);
+  $('go-historial').setAttribute('aria-pressed', String(verHistorial));
 }
 
 function render() {
   renderHeader();
+  renderNav();
 
   const session = active();
   const stage = !session ? 'idle' : session.finished ? 'done' : 'active';
+
+  // Entrenando, la pantalla es solo el ejercicio: la cabecera estorba.
+  document.body.classList.toggle('entrenando', stage !== 'idle');
+  document.body.classList.toggle('descansando', stage === 'active' && Boolean(session.rest));
 
   $('stage-idle').classList.toggle('hidden', stage !== 'idle');
   $('stage-active').classList.toggle('hidden', stage !== 'active');
@@ -775,7 +738,6 @@ function render() {
   }
 
   renderHistory();
-  renderCopyHint();
   renderSettings();
 }
 
@@ -814,23 +776,18 @@ $('rest-minus').onclick = () => nudgeRest(-15);
 
 $('reps-minus').onclick = () => { sheetCtx.reps = Math.max(0, sheetCtx.reps - 1); renderSheet(); };
 $('reps-plus').onclick = () => { sheetCtx.reps += 1; renderSheet(); };
+$('pain-toggle').onclick = () => { sheetCtx.painOpen = !sheetCtx.painOpen; renderSheet(); };
 $('sheet-save').onclick = saveSet;
 $('sheet-cancel').onclick = () => $('sheet').close();
 $('sheet').addEventListener('close', () => { sheetCtx = null; });
 
-$('copy-log').onclick = copyLog;
 $('backup').onclick = downloadBackup;
 $('hook-save').onclick = saveConfig;
 $('send-log').onclick = sendLog;
 
-for (const tab of document.querySelectorAll('.tabs button')) {
-  tab.onclick = () => {
-    for (const t of document.querySelectorAll('.tabs button')) t.classList.toggle('active', t === tab);
-    for (const s of document.querySelectorAll('main > section')) {
-      s.classList.toggle('hidden', s.id !== `view-${tab.dataset.view}`);
-    }
-  };
-}
+$('go-historial').onclick = () => { verHistorial = !verHistorial; renderNav(); };
+$('go-ajustes').onclick = () => $('settings').showModal();
+$('settings-close').onclick = () => $('settings').close();
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
